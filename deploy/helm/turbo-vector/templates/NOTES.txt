@@ -1,0 +1,11 @@
+1. API service is deployed as {{ .Values.api.service.type }}:
+   {{ include "turbo-vector.apiServiceName" . }}
+
+2. For local access with the default ClusterIP service:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "turbo-vector.apiServiceName" . }} {{ .Values.api.service.port }}:{{ .Values.api.service.port }}
+
+3. Health check:
+   curl -fsS http://127.0.0.1:{{ .Values.api.service.port }}/health
+
+4. Runtime config check:
+   curl -fsS http://127.0.0.1:{{ .Values.api.service.port }}/v1/system/runtime

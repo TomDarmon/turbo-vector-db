@@ -1,0 +1,60 @@
+{{- if and .Values.preflight.enabled (or (eq (include "turbo-vector.storageMode" .) "rustfs") (eq (include "turbo-vector.storageMode" .) "s3")) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-preflight-storage-s3
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: preflight
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: {{ .Values.preflight.hookDeletePolicy | quote }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: preflight
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      containers:
+        - name: storage-preflight-s3
+          image: {{ .Values.preflight.awsCliImage | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ ternary .Values.rustfs.credentials.accessKeyField .Values.storage.s3.accessKeyField (eq (include "turbo-vector.storageMode" .) "rustfs") }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ ternary .Values.rustfs.credentials.secretKeyField .Values.storage.s3.secretKeyField (eq (include "turbo-vector.storageMode" .) "rustfs") }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ include "turbo-vector.storageRegion" . | quote }}
+            - name: TV_STORAGE_ENDPOINT
+              value: {{ include "turbo-vector.storageEndpoint" . | quote }}
+            - name: TV_STORAGE_BUCKET
+              value: {{ .Values.storage.bucket | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              for i in $(seq 1 {{ max 10 (div .Values.preflight.timeoutSeconds 2) }}); do
+                if aws s3api list-buckets --endpoint-url "${TV_STORAGE_ENDPOINT}" >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 2
+              done
+              if ! aws s3api head-bucket --bucket "${TV_STORAGE_BUCKET}" --endpoint-url "${TV_STORAGE_ENDPOINT}" >/dev/null 2>&1; then
+                echo "[preflight] unable to access bucket ${TV_STORAGE_BUCKET} at ${TV_STORAGE_ENDPOINT}"
+                exit 1
+              fi
+              echo "[preflight] s3-compatible storage connectivity check passed"
+{{- end }}

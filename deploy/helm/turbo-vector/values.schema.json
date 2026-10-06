@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "allowUnsafeBrokerHA": { "type": "boolean" },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "strict": { "type": "boolean" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        },
+        "pullSecrets": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": ["mode", "bucket", "s3", "gcs"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["rustfs", "s3", "gcs"] },
+        "bucket": { "type": "string", "minLength": 1 },
+        "simulatedLatencyMs": { "type": "integer", "minimum": 0 },
+        "s3": {
+          "type": "object",
+          "properties": {
+            "endpoint": { "type": "string" },
+            "region": { "type": "string" },
+            "existingSecret": { "type": "string" },
+            "accessKey": { "type": "string" },
+            "secretKey": { "type": "string" },
+            "accessKeyField": { "type": "string", "minLength": 1 },
+            "secretKeyField": { "type": "string", "minLength": 1 }
+          }
+        },
+        "gcs": {
+          "type": "object",
+          "properties": {
+            "endpoint": { "type": "string" },
+            "region": { "type": "string" },
+            "useWorkloadIdentity": { "type": "boolean" },
+            "credentialsSecretName": { "type": "string" },
+            "credentialsSecretKey": { "type": "string", "minLength": 1 },
+            "credentialsMountPath": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "rustfs": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string", "minLength": 1 },
+        "imagePullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "consolePort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "credentials": {
+          "type": "object",
+          "properties": {
+            "accessKey": { "type": "string" },
+            "secretKey": { "type": "string" },
+            "accessKeyField": { "type": "string", "minLength": 1 },
+            "secretKeyField": { "type": "string", "minLength": 1 }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "size": { "type": "string", "minLength": 1 },
+            "storageClass": { "type": "string" },
+            "accessModes": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "apiBodyLimitBytes": { "type": "integer", "minimum": 1 },
+        "queryAnnEnabled": { "type": "boolean" },
+        "distributedShardCount": { "type": "integer", "minimum": 1 },
+        "distributedShardTimeoutMs": { "type": "integer", "minimum": 1 },
+        "distributedFailOpen": { "type": "boolean" },
+        "distributedRequiredSuccessfulShards": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "otlpEndpoint": { "type": "string", "minLength": 1 },
+        "metricExportIntervalMs": { "type": "integer", "minimum": 1 },
+        "sampleRatio": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "api": {
+      "type": "object",
+      "required": ["replicas", "service", "cache"],
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "cache": {
+          "type": "object",
+          "required": ["mode", "mountPath", "pvc"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["emptyDir", "pvc"] },
+            "mountPath": { "type": "string", "minLength": 1 },
+            "emptyDir": {
+              "type": "object",
+              "properties": {
+                "sizeLimit": { "type": "string" }
+              }
+            },
+            "pvc": {
+              "type": "object",
+              "properties": {
+                "existingClaim": { "type": "string" },
+                "size": { "type": "string" },
+                "storageClass": { "type": "string" },
+                "requireStorageClass": { "type": "boolean" },
+                "accessModes": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "broker": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "service": {
+          "type": "object",
+          "properties": {
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "requeueIntervalMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "wal": {
+          "type": "object",
+          "properties": {
+            "flushIntervalMs": { "type": "integer", "minimum": 1 },
+            "collectionRefreshIntervalMs": { "type": "integer", "minimum": 1 },
+            "adaptiveBacklogThreshold": { "type": "integer", "minimum": 1 },
+            "adaptiveFlushIntervalMs": { "type": "integer", "minimum": 1 },
+            "buildFts": { "type": "boolean" },
+            "buildAnn": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "timeoutSeconds": { "type": "integer", "minimum": 10 },
+        "brokerCheckImage": { "type": "string", "minLength": 1 },
+        "awsCliImage": { "type": "string", "minLength": 1 },
+        "gcloudImage": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "mode": { "const": "rustfs" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "rustfs": {
+            "properties": {
+              "enabled": { "const": true }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "mode": { "const": "s3" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "s3": {
+                "properties": {
+                  "endpoint": { "minLength": 1 },
+                  "region": { "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "mode": { "const": "gcs" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "gcs": {
+                "properties": {
+                  "endpoint": { "minLength": 1 },
+                  "region": { "minLength": 1 },
+                  "credentialsMountPath": { "minLength": 1 },
+                  "credentialsSecretKey": { "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "api": {
+            "properties": {
+              "cache": {
+                "properties": {
+                  "mode": { "const": "pvc" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "api": {
+            "properties": {
+              "cache": {
+                "properties": {
+                  "pvc": {
+                    "properties": {
+                      "size": { "minLength": 1 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

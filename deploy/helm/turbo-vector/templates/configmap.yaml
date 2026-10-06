@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-runtime
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+data:
+  TV_STORAGE_PROVIDER: {{ include "turbo-vector.storageProvider" . | quote }}
+  TV_STORAGE_ENDPOINT: {{ include "turbo-vector.storageEndpoint" . | quote }}
+  TV_STORAGE_REGION: {{ include "turbo-vector.storageRegion" . | quote }}
+  TV_STORAGE_BUCKET: {{ .Values.storage.bucket | quote }}
+  TV_STORAGE_SIMULATED_LATENCY_MS: {{ printf "%d" (int .Values.storage.simulatedLatencyMs) | quote }}
+  TV_API_BODY_LIMIT_BYTES: {{ printf "%d" (int .Values.runtime.apiBodyLimitBytes) | quote }}
+  TV_QUERY_ANN_ENABLED: {{ .Values.runtime.queryAnnEnabled | quote }}
+  TV_DISTRIBUTED_SHARD_COUNT: {{ printf "%d" (int .Values.runtime.distributedShardCount) | quote }}
+  TV_DISTRIBUTED_SHARD_TIMEOUT_MS: {{ printf "%d" (int .Values.runtime.distributedShardTimeoutMs) | quote }}
+  TV_DISTRIBUTED_FAIL_OPEN: {{ .Values.runtime.distributedFailOpen | quote }}
+  TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS: {{ printf "%d" (int .Values.runtime.distributedRequiredSuccessfulShards) | quote }}
+  TV_OTEL_ENABLED: {{ .Values.telemetry.enabled | quote }}
+  TV_OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.telemetry.otlpEndpoint | quote }}
+  TV_OTEL_METRIC_EXPORT_INTERVAL_MS: {{ printf "%d" (int .Values.telemetry.metricExportIntervalMs) | quote }}
+  TV_OTEL_SAMPLE_RATIO: {{ .Values.telemetry.sampleRatio | quote }}

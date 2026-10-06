@@ -1,0 +1,194 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${TV_STORAGE_ACCESS_KEY:-turboadmin}
+      RUSTFS_SECRET_KEY: ${TV_STORAGE_SECRET_KEY:-turbosecret}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      # Named volume avoids host filesystem permission mismatches in CI runners.
+      - rustfs-data:/data
+    networks:
+      - turbo-vector-net
+
+  rustfs-init:
+    image: amazon/aws-cli:2.17.57
+    restart: "no"
+    depends_on:
+      - rustfs
+    environment:
+      AWS_ACCESS_KEY_ID: ${TV_STORAGE_ACCESS_KEY:-turboadmin}
+      AWS_SECRET_ACCESS_KEY: ${TV_STORAGE_SECRET_KEY:-turbosecret}
+      AWS_DEFAULT_REGION: ${TV_STORAGE_REGION:-us-east-1}
+      TV_STORAGE_ENDPOINT: http://host.docker.internal:9000
+      TV_STORAGE_BUCKET: ${TV_STORAGE_BUCKET:-turbo-vector-dev}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        set -eu
+        until aws s3api list-buckets --endpoint-url "http://host.docker.internal:9000" >/dev/null 2>&1; do
+          sleep 1
+        done
+        if ! aws s3api head-bucket --bucket "${TV_STORAGE_BUCKET:-turbo-vector-dev}" --endpoint-url "http://host.docker.internal:9000" >/dev/null 2>&1; then
+          aws s3 mb "s3://${TV_STORAGE_BUCKET:-turbo-vector-dev}" --endpoint-url "http://host.docker.internal:9000"
+        fi
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - turbo-vector-net
+
+  api:
+    build:
+      context: ./rust
+      dockerfile: Dockerfile
+    depends_on:
+      broker:
+        condition: service_started
+    environment:
+      TV_BIND_ADDR: 0.0.0.0:8080
+      TV_STORAGE_PROVIDER: ${TV_STORAGE_PROVIDER:-s3}
+      TV_STORAGE_ENDPOINT: ${TV_STORAGE_ENDPOINT:-http://rustfs:9000}
+      TV_STORAGE_REGION: ${TV_STORAGE_REGION:-us-east-1}
+      TV_STORAGE_BUCKET: ${TV_STORAGE_BUCKET:-turbo-vector-dev}
+      TV_STORAGE_ACCESS_KEY: ${TV_STORAGE_ACCESS_KEY:-}
+      TV_STORAGE_SECRET_KEY: ${TV_STORAGE_SECRET_KEY:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/root/.config/gcloud/application_default_credentials.json}
+      TV_STORAGE_SIMULATED_LATENCY_MS: ${TV_STORAGE_SIMULATED_LATENCY_MS:-0}
+      TV_QUEUE_BROKER_URL: http://host.docker.internal:8091
+      TV_WAL_QUEUE_BACKGROUND_DRAIN: "false"
+      TV_DISTRIBUTED_SHARD_COUNT: ${TV_DISTRIBUTED_SHARD_COUNT:-1}
+      TV_DISTRIBUTED_SHARD_TIMEOUT_MS: ${TV_DISTRIBUTED_SHARD_TIMEOUT_MS:-250}
+      TV_DISTRIBUTED_FAIL_OPEN: ${TV_DISTRIBUTED_FAIL_OPEN:-true}
+      TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS: ${TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS:-1}
+      TV_OTEL_ENABLED: ${TV_OTEL_ENABLED:-false}
+      TV_OTEL_EXPORTER_OTLP_ENDPOINT: ${TV_OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      TV_OTEL_SERVICE_NAME: ${TV_OTEL_SERVICE_NAME_API:-turbo-vector-api}
+      TV_OTEL_METRIC_EXPORT_INTERVAL_MS: ${TV_OTEL_METRIC_EXPORT_INTERVAL_MS:-5000}
+      TV_OTEL_SAMPLE_RATIO: ${TV_OTEL_SAMPLE_RATIO:-0.05}
+      TV_VIZ_ENABLED: ${TV_VIZ_ENABLED:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${TV_GCS_ADC_HOST_PATH:-${HOME}/.config/gcloud/application_default_credentials.json}:${GOOGLE_APPLICATION_CREDENTIALS:-/root/.config/gcloud/application_default_credentials.json}:ro
+    networks:
+      - turbo-vector-net
+
+  broker:
+    build:
+      context: ./rust
+      dockerfile: Dockerfile
+    environment:
+      TV_PROCESS_ROLE: broker
+      TV_BIND_ADDR: 0.0.0.0:8091
+      TV_STORAGE_PROVIDER: ${TV_STORAGE_PROVIDER:-s3}
+      TV_STORAGE_ENDPOINT: ${TV_STORAGE_ENDPOINT:-http://rustfs:9000}
+      TV_STORAGE_REGION: ${TV_STORAGE_REGION:-us-east-1}
+      TV_STORAGE_BUCKET: ${TV_STORAGE_BUCKET:-turbo-vector-dev}
+      TV_STORAGE_ACCESS_KEY: ${TV_STORAGE_ACCESS_KEY:-}
+      TV_STORAGE_SECRET_KEY: ${TV_STORAGE_SECRET_KEY:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/root/.config/gcloud/application_default_credentials.json}
+      TV_STORAGE_SIMULATED_LATENCY_MS: ${TV_STORAGE_SIMULATED_LATENCY_MS:-0}
+      TV_BROKER_REQUEUE_INTERVAL_MS: "1000"
+      TV_DISTRIBUTED_SHARD_COUNT: ${TV_DISTRIBUTED_SHARD_COUNT:-1}
+      TV_DISTRIBUTED_SHARD_TIMEOUT_MS: ${TV_DISTRIBUTED_SHARD_TIMEOUT_MS:-250}
+      TV_DISTRIBUTED_FAIL_OPEN: ${TV_DISTRIBUTED_FAIL_OPEN:-true}
+      TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS: ${TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS:-1}
+      TV_OTEL_ENABLED: ${TV_OTEL_ENABLED:-false}
+      TV_OTEL_EXPORTER_OTLP_ENDPOINT: ${TV_OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      TV_OTEL_SERVICE_NAME: ${TV_OTEL_SERVICE_NAME_BROKER:-turbo-vector-broker}
+      TV_OTEL_METRIC_EXPORT_INTERVAL_MS: ${TV_OTEL_METRIC_EXPORT_INTERVAL_MS:-5000}
+      TV_OTEL_SAMPLE_RATIO: ${TV_OTEL_SAMPLE_RATIO:-0.05}
+      TV_VIZ_ENABLED: ${TV_VIZ_ENABLED:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8091:8091"
+    volumes:
+      - ${TV_GCS_ADC_HOST_PATH:-${HOME}/.config/gcloud/application_default_credentials.json}:${GOOGLE_APPLICATION_CREDENTIALS:-/root/.config/gcloud/application_default_credentials.json}:ro
+    networks:
+      - turbo-vector-net
+
+  upsert-worker:
+    build:
+      context: ./rust
+      dockerfile: Dockerfile
+    depends_on:
+      broker:
+        condition: service_started
+    environment:
+      TV_PROCESS_ROLE: worker
+      TV_STORAGE_PROVIDER: ${TV_STORAGE_PROVIDER:-s3}
+      TV_STORAGE_ENDPOINT: ${TV_STORAGE_ENDPOINT:-http://rustfs:9000}
+      TV_STORAGE_REGION: ${TV_STORAGE_REGION:-us-east-1}
+      TV_STORAGE_BUCKET: ${TV_STORAGE_BUCKET:-turbo-vector-dev}
+      TV_STORAGE_ACCESS_KEY: ${TV_STORAGE_ACCESS_KEY:-}
+      TV_STORAGE_SECRET_KEY: ${TV_STORAGE_SECRET_KEY:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/root/.config/gcloud/application_default_credentials.json}
+      TV_STORAGE_SIMULATED_LATENCY_MS: ${TV_STORAGE_SIMULATED_LATENCY_MS:-0}
+      TV_QUEUE_BROKER_URL: http://host.docker.internal:8091
+      TV_WAL_WORKER_FLUSH_INTERVAL_MS: "1000"
+      TV_WAL_WORKER_COLLECTION_REFRESH_INTERVAL_MS: "5000"
+      TV_WAL_WORKER_ADAPTIVE_BACKLOG_THRESHOLD: "256"
+      TV_WAL_WORKER_ADAPTIVE_FLUSH_INTERVAL_MS: "1000"
+      TV_WAL_WORKER_BUILD_ANN: "true"
+      TV_DISTRIBUTED_SHARD_COUNT: ${TV_DISTRIBUTED_SHARD_COUNT:-1}
+      TV_DISTRIBUTED_SHARD_TIMEOUT_MS: ${TV_DISTRIBUTED_SHARD_TIMEOUT_MS:-250}
+      TV_DISTRIBUTED_FAIL_OPEN: ${TV_DISTRIBUTED_FAIL_OPEN:-true}
+      TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS: ${TV_DISTRIBUTED_REQUIRED_SUCCESSFUL_SHARDS:-1}
+      TV_OTEL_ENABLED: ${TV_OTEL_ENABLED:-false}
+      TV_OTEL_EXPORTER_OTLP_ENDPOINT: ${TV_OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      TV_OTEL_SERVICE_NAME: ${TV_OTEL_SERVICE_NAME_WORKER:-turbo-vector-worker}
+      TV_OTEL_METRIC_EXPORT_INTERVAL_MS: ${TV_OTEL_METRIC_EXPORT_INTERVAL_MS:-5000}
+      TV_OTEL_SAMPLE_RATIO: ${TV_OTEL_SAMPLE_RATIO:-0.05}
+      TV_VIZ_ENABLED: ${TV_VIZ_ENABLED:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${TV_GCS_ADC_HOST_PATH:-${HOME}/.config/gcloud/application_default_credentials.json}:${GOOGLE_APPLICATION_CREDENTIALS:-/root/.config/gcloud/application_default_credentials.json}:ro
+    networks:
+      - turbo-vector-net
+
+  frontend:
+    profiles: ["viz"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_started
+      broker:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me}
+      DATABASE_URL: ${TV_VIZ_DATABASE_URL:-file:/app/data/db.sqlite}
+      TV_VIZ_ENABLED: ${TV_VIZ_ENABLED:-true}
+      TV_API_BASE_URL: ${TV_API_BASE_URL:-http://api:8080}
+      TV_BROKER_BASE_URL: ${TV_BROKER_BASE_URL:-http://broker:8091}
+      TV_VIZ_ADMIN_EMAIL: ${TV_VIZ_ADMIN_EMAIL:-admin@turbo-vector.local}
+      TV_VIZ_ADMIN_PASSWORD: ${TV_VIZ_ADMIN_PASSWORD:-admin}
+      TV_VIZ_FORCE_PASSWORD_ROTATION: ${TV_VIZ_FORCE_PASSWORD_ROTATION:-true}
+    ports:
+      - "3000:3000"
+    volumes:
+      - tv-viz-data:/app/data
+    networks:
+      - turbo-vector-net
+
+networks:
+  turbo-vector-net:
+    name: turbo-vector-net
+    external: true
+
+volumes:
+  rustfs-data:
+  tv-viz-data:

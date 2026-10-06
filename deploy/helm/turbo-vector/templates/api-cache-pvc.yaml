@@ -1,0 +1,20 @@
+{{- if and (eq .Values.api.cache.mode "pvc") (not .Values.api.cache.pvc.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "turbo-vector.apiCachePvcName" . }}
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    {{- toYaml .Values.api.cache.pvc.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.api.cache.pvc.size }}
+  {{- if .Values.api.cache.pvc.storageClass }}
+  storageClassName: {{ .Values.api.cache.pvc.storageClass }}
+  {{- end }}
+{{- end }}

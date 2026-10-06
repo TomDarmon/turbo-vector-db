@@ -1,0 +1,41 @@
+{{- if .Values.preflight.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-preflight-broker
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: preflight
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: {{ .Values.preflight.hookDeletePolicy | quote }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: preflight
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      containers:
+        - name: broker-preflight
+          image: {{ .Values.preflight.brokerCheckImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              for i in $(seq 1 {{ max 10 (div .Values.preflight.timeoutSeconds 2) }}); do
+                if wget -q -O - "http://{{ include "turbo-vector.brokerServiceName" . }}:{{ .Values.broker.service.port }}/health" >/dev/null 2>&1; then
+                  echo "[preflight] broker is reachable"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "[preflight] broker health endpoint is unreachable"
+              exit 1
+{{- end }}

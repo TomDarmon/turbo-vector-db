@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+.vscode/
+
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Rust
+target/
+**/target/
+
+# Local runtime
+.env
+local/
+
+.env.*

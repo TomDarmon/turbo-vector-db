@@ -1,0 +1,33 @@
+[server]
+base_url = "http://127.0.0.1:8080"
+health_timeout_s = 5.0
+
+[collection]
+name = "bench-profile"
+dimension = 128
+metric = "cosine"
+cleanup = true
+
+[ingest]
+num_namespaces = 3
+vectors_per_namespace = 10000
+batch_size = 200
+wait_for_applied = true
+poll_interval_s = 0.25
+poll_timeout_s = 120.0
+post_ingest_delay_ms = 200
+
+[query]
+top_k = 10
+search_strategy = "ann"
+include_metadata = false
+include_values = false
+
+[query.cold]
+enabled = true
+queries_per_namespace = 50
+
+[query.warm]
+enabled = true
+queries_per_namespace = 200
+warmup_queries = 10

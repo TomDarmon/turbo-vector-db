@@ -1,0 +1,182 @@
+nameOverride: ""
+fullnameOverride: ""
+
+allowUnsafeBrokerHA: false
+
+validation:
+  strict: true
+
+image:
+  repository: turbo-vector-api
+  tag: v0.0.1-rc5
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+storage:
+  mode: rustfs
+  bucket: turbo-vector-dev
+  simulatedLatencyMs: 0
+  s3:
+    endpoint: ""
+    region: us-east-1
+    existingSecret: ""
+    accessKey: ""
+    secretKey: ""
+    accessKeyField: accessKey
+    secretKeyField: secretKey
+  gcs:
+    endpoint: https://storage.googleapis.com
+    region: auto
+    useWorkloadIdentity: true
+    credentialsSecretName: ""
+    credentialsSecretKey: application_default_credentials.json
+    credentialsMountPath: /var/run/secrets/turbo-vector/gcs/application_default_credentials.json
+
+rustfs:
+  enabled: true
+  image: rustfs/rustfs:latest
+  imagePullPolicy: IfNotPresent
+  service:
+    port: 9000
+    consolePort: 9001
+  credentials:
+    accessKey: turboadmin
+    secretKey: turbosecret
+    accessKeyField: accessKey
+    secretKeyField: secretKey
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+  bucketInit:
+    image: amazon/aws-cli:2.17.57
+
+runtime:
+  apiBodyLimitBytes: 33554432
+  queryAnnEnabled: true
+  distributedShardCount: 1
+  distributedShardTimeoutMs: 250
+  distributedFailOpen: true
+  distributedRequiredSuccessfulShards: 1
+
+telemetry:
+  enabled: false
+  otlpEndpoint: http://otel-collector.default.svc.cluster.local:4318
+  metricExportIntervalMs: 5000
+  sampleRatio: 0.05
+
+api:
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+  extraEnvFrom: []
+  probes:
+    readiness:
+      initialDelaySeconds: 3
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 12
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 6
+  cache:
+    mode: emptyDir
+    mountPath: /var/lib/turbo-vector/ann-rerank-cache
+    emptyDir:
+      sizeLimit: ""
+    pvc:
+      existingClaim: ""
+      size: 20Gi
+      storageClass: ""
+      requireStorageClass: false
+      accessModes:
+        - ReadWriteOnce
+  cacheConfig:
+    rerankSsdMaxEntries: 100000
+    rerankSsdMaxBytes: 536870912
+    namespaceCacheMaxEntries: 4096
+    namespaceCacheMaxBytes: 1073741824
+    annBucketCacheMaxEntries: 32768
+    annBucketCacheMaxBytes: 1073741824
+    filterClusterCacheMaxEntries: 8192
+    filterClusterCacheMaxBytes: 67108864
+    filterRowCacheMaxEntries: 65536
+    filterRowCacheMaxBytes: 536870912
+
+broker:
+  replicas: 1
+  service:
+    port: 8091
+  requeueIntervalMs: 1000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+  extraEnvFrom: []
+  probes:
+    readiness:
+      initialDelaySeconds: 3
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 12
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 6
+
+worker:
+  replicas: 1
+  wal:
+    flushIntervalMs: 1100
+    collectionRefreshIntervalMs: 5000
+    adaptiveBacklogThreshold: 256
+    adaptiveFlushIntervalMs: 1000
+    buildFts: true
+    buildAnn: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+  extraEnvFrom: []
+
+preflight:
+  enabled: true
+  timeoutSeconds: 120
+  brokerCheckImage: busybox:1.36
+  awsCliImage: amazon/aws-cli:2.17.57
+  gcloudImage: google/cloud-sdk:slim
+  hookDeletePolicy: before-hook-creation,hook-succeeded

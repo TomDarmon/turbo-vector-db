@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "turbo-vector.brokerServiceName" . }}
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "turbo-vector.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+  ports:
+    - name: http
+      port: {{ .Values.broker.service.port }}
+      targetPort: http
+      protocol: TCP

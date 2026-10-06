@@ -1,0 +1,15 @@
+{{- if gt (int .Values.broker.replicas) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-broker
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "turbo-vector.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: broker
+{{- end }}

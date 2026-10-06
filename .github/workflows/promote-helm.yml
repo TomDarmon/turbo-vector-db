@@ -1,0 +1,76 @@
+name: Promote helm chart
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_rc_tag:
+        description: "Source RC chart tag (for example: v1.0.1-rc or 1.0.1-rc1)."
+        required: true
+        type: string
+      target_tag:
+        description: "Target promoted chart tag (for example: v1.0.1 or 1.0.1)."
+        required: true
+        type: string
+      chart_name:
+        description: "Chart artifact name."
+        required: true
+        default: "turbo-vector"
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  promote:
+    # Disabled by default. See docs/ci-cd-setup.md to enable on your own GCP project.
+    if: ${{ vars.CICD_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'your-gcp-project-id' }}
+      REGION: ${{ vars.GCP_REGION || 'your-gcp-region' }}
+      HELM_REPOSITORY: ${{ vars.GCP_HELM_REPOSITORY || 'your-helm-repository' }}
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Validate input tags
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_RC_RAW="${{ inputs.source_rc_tag }}"
+          TARGET_RAW="${{ inputs.target_tag }}"
+
+          SOURCE_RC_TAG="${SOURCE_RC_RAW#v}"
+          TARGET_TAG="${TARGET_RAW#v}"
+
+          if [[ ! "${SOURCE_RC_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc([0-9]+)?$ ]]; then
+            echo "Invalid source_rc_tag '${SOURCE_RC_RAW}'."
+            exit 1
+          fi
+
+          if [[ ! "${TARGET_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid target_tag '${TARGET_RAW}'."
+            exit 1
+          fi
+
+          echo "source_rc_tag=${SOURCE_RC_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "target_tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Promote RC chart tag to final chart tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SOURCE_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${HELM_REPOSITORY}/${{ inputs.chart_name }}:${{ steps.meta.outputs.source_rc_tag }}"
+          TARGET_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${HELM_REPOSITORY}/${{ inputs.chart_name }}:${{ steps.meta.outputs.target_tag }}"
+
+          gcloud artifacts docker tags add "${SOURCE_REF}" "${TARGET_REF}"

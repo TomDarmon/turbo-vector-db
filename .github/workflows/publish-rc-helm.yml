@@ -1,0 +1,86 @@
+name: Publish RC helm chart
+
+on:
+  push:
+    tags:
+      - "helm/v*.*.*-rc*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    # Disabled by default. See docs/ci-cd-setup.md to enable on your own GCP project.
+    if: ${{ vars.CICD_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'your-gcp-project-id' }}
+      REGION: ${{ vars.GCP_REGION || 'your-gcp-region' }}
+      HELM_REPOSITORY: ${{ vars.GCP_HELM_REPOSITORY || 'your-helm-repository' }}
+      CHART_PATH: deploy/helm/turbo-vector
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate helm RC tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "${TAG}" =~ ^helm/v[0-9]+\.[0-9]+\.[0-9]+-rc([0-9]+)?$ ]]; then
+            echo "Invalid helm rc tag '${TAG}'. Expected format helm/vX.Y.Z-rc or helm/vX.Y.Z-rcN."
+            exit 1
+          fi
+
+          RELEASE_TAG="${TAG#helm/}"
+          CHART_VERSION="${RELEASE_TAG#v}"
+
+          echo "release_tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "chart_version=${CHART_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure Docker authentication for Artifact Registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Authenticate Helm to Artifact Registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud auth print-access-token | helm registry login \
+            -u oauth2accesstoken \
+            --password-stdin \
+            "https://${REGION}-docker.pkg.dev"
+
+      - name: Package and push RC chart
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          helm package "${CHART_PATH}" \
+            --version "${{ steps.meta.outputs.chart_version }}" \
+            --app-version "${{ steps.meta.outputs.release_tag }}" \
+            --destination dist
+
+          CHART_ARCHIVE="$(ls dist/*.tgz | head -n1)"
+          OCI_REPOSITORY="oci://${REGION}-docker.pkg.dev/${PROJECT_ID}/${HELM_REPOSITORY}"
+          helm push "${CHART_ARCHIVE}" "${OCI_REPOSITORY}"

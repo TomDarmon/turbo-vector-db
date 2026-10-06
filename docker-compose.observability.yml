@@ -1,0 +1,184 @@
+services:
+  zookeeper-1:
+    image: signoz/zookeeper:3.7.1
+    container_name: turbo-signoz-zookeeper-1
+    restart: unless-stopped
+    user: root
+    environment:
+      ZOO_SERVER_ID: "1"
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+      ZOO_AUTOPURGE_INTERVAL: "1"
+      ZOO_ENABLE_PROMETHEUS_METRICS: "yes"
+      ZOO_PROMETHEUS_METRICS_PORT_NUMBER: "9141"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -s -m 2 http://localhost:8080/commands/ruok | grep error | grep null
+      interval: 30s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - signoz-zookeeper-1:/bitnami/zookeeper
+    networks:
+      - turbo-vector-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.5.6
+    container_name: turbo-signoz-clickhouse
+    restart: unless-stopped
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - -q
+        - 0.0.0.0:8123/ping
+      interval: 30s
+      timeout: 5s
+      retries: 6
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - signoz-clickhouse:/var/lib/clickhouse
+      - ./observability/signoz/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+    networks:
+      - turbo-vector-net
+
+  signoz-telemetrystore-migrator:
+    image: signoz/signoz-otel-collector:v0.144.1
+    container_name: turbo-signoz-telemetrystore-migrator
+    restart: on-failure
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - |
+        /signoz-otel-collector migrate bootstrap &&
+        /signoz-otel-collector migrate sync up &&
+        /signoz-otel-collector migrate async up
+    environment:
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN: tcp://clickhouse:9000
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER: cluster
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_REPLICATION: "false"
+      SIGNOZ_OTEL_COLLECTOR_TIMEOUT: 10m
+    networks:
+      - turbo-vector-net
+
+  signoz:
+    image: signoz/signoz:v0.113.0
+    container_name: turbo-signoz
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      signoz-telemetrystore-migrator:
+        condition: service_completed_successfully
+    environment:
+      SIGNOZ_ALERTMANAGER_PROVIDER: signoz
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://clickhouse:9000
+      SIGNOZ_SQLSTORE_SQLITE_PATH: /var/lib/signoz/signoz.db
+      SIGNOZ_TOKENIZER_JWT_SECRET: turbo-signoz-dev-secret
+    ports:
+      - "3301:8080"
+    volumes:
+      - signoz-sqlite:/var/lib/signoz
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - -q
+        - localhost:8080/api/v1/health
+      interval: 30s
+      timeout: 5s
+      retries: 6
+    networks:
+      - turbo-vector-net
+
+  otel-collector:
+    image: signoz/signoz-otel-collector:v0.144.1
+    container_name: turbo-signoz-otel-collector
+    restart: unless-stopped
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      signoz-telemetrystore-migrator:
+        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - |
+        /signoz-otel-collector migrate sync check &&
+        /signoz-otel-collector --config=/etc/otel-collector-config.yaml
+    volumes:
+      - ./observability/signoz/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    environment:
+      OTEL_RESOURCE_ATTRIBUTES: host.name=turbo-signoz-host,os.type=linux
+      LOW_CARDINAL_EXCEPTION_GROUPING: "false"
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN: tcp://clickhouse:9000
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER: cluster
+      SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_REPLICATION: "false"
+      SIGNOZ_OTEL_COLLECTOR_TIMEOUT: 10m
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+      - "13133:13133"
+    networks:
+      - turbo-vector-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: turbo-node-exporter
+    restart: unless-stopped
+    profiles:
+      - host-metrics
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro
+    networks:
+      - turbo-vector-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: turbo-cadvisor
+    restart: unless-stopped
+    profiles:
+      - host-metrics
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - turbo-vector-net
+
+networks:
+  turbo-vector-net:
+    name: turbo-vector-net
+    external: true
+
+volumes:
+  signoz-clickhouse:
+    name: turbo-signoz-clickhouse
+  signoz-sqlite:
+    name: turbo-signoz-sqlite
+  signoz-zookeeper-1:
+    name: turbo-signoz-zookeeper-1

@@ -1,0 +1,5 @@
+{
+  "snapshot": "snapshot-20260214-dee61a31-1ec0-4e4f-870b-cb89778d33b7",
+  "start": "sudo nohup dockerd --host=unix:///var/run/docker.sock --iptables=false --storage-driver=vfs >/tmp/dockerd.log 2>&1 & if ! rustup run 1.91.0 rustc --version >/dev/null 2>&1; then rustup toolchain install 1.91.0; fi && rustup component add --toolchain 1.91.0 rustfmt clippy && rustup default 1.91.0 >/tmp/rustup-default.log 2>&1",
+  "terminals": []
+}

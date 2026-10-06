@@ -1,0 +1,83 @@
+name: Promote images
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_rc_tag:
+        description: "Source RC image tag (for example: v1.0.1-rc or v1.0.1-rc1)."
+        required: true
+        type: string
+      target_tag:
+        description: "Target promoted tag (for example: v1.0.1)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  promote:
+    # Disabled by default. See docs/ci-cd-setup.md to enable on your own GCP project.
+    if: ${{ vars.CICD_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_REGION || 'your-gcp-region' }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID || 'your-gcp-project-id' }}/${{ vars.GCP_DOCKER_REPOSITORY || 'your-docker-repository' }}
+      IMAGE_API: turbo-vector-api
+      IMAGE_BROKER: turbo-vector-broker
+      IMAGE_WORKER: turbo-vector-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication for Artifact Registry
+        run: |
+          REGISTRY_HOST="$(echo "${GCP_ARTIFACT_REGISTRY_REPOSITORY}" | cut -d'/' -f1)"
+          gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
+
+      - name: Resolve source RC tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_RC_TAG="${{ inputs.source_rc_tag }}"
+          TARGET_TAG="${{ inputs.target_tag }}"
+
+          if [[ ! "${SOURCE_RC_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc([0-9]+)?$ ]]; then
+            echo "Invalid source_rc_tag '${SOURCE_RC_TAG}'. Expected vX.Y.Z-rc or vX.Y.Z-rcN."
+            exit 1
+          fi
+
+          if [[ ! "${TARGET_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid target_tag '${TARGET_TAG}'. Expected vX.Y.Z."
+            exit 1
+          fi
+
+          echo "final_tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "source_rc_tag=${SOURCE_RC_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Promote RC tags to final tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FINAL_TAG="${{ steps.meta.outputs.final_tag }}"
+          SOURCE_RC_TAG="${{ steps.meta.outputs.source_rc_tag }}"
+
+          for IMAGE in "${IMAGE_API}" "${IMAGE_BROKER}" "${IMAGE_WORKER}"; do
+            SRC_IMAGE="${GCP_ARTIFACT_REGISTRY_REPOSITORY}/${IMAGE}:${SOURCE_RC_TAG}"
+            DST_IMAGE="${GCP_ARTIFACT_REGISTRY_REPOSITORY}/${IMAGE}:${FINAL_TAG}"
+            docker buildx imagetools create --tag "${DST_IMAGE}" "${SRC_IMAGE}"
+          done

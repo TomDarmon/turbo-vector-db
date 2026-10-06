@@ -1,0 +1,203 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-api
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "turbo-vector.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      {{- with .Values.api.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-broker
+          image: {{ .Values.preflight.brokerCheckImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              for i in $(seq 1 {{ max 10 (div .Values.preflight.timeoutSeconds 2) }}); do
+                if wget -q -O - "http://{{ include "turbo-vector.brokerServiceName" . }}:{{ .Values.broker.service.port }}/health" >/dev/null 2>&1; then
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "broker health endpoint did not become ready in time"
+              exit 1
+        {{- if .Values.rustfs.enabled }}
+        - name: wait-for-rustfs-bucket
+          image: {{ .Values.rustfs.bucketInit.image | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.accessKeyField }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.secretKeyField }}
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: TV_STORAGE_ENDPOINT
+              value: {{ include "turbo-vector.storageEndpoint" . | quote }}
+            - name: TV_STORAGE_BUCKET
+              value: {{ .Values.storage.bucket | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              for i in $(seq 1 {{ max 10 (div .Values.preflight.timeoutSeconds 2) }}); do
+                if aws s3api head-bucket --bucket "${TV_STORAGE_BUCKET}" --endpoint-url "${TV_STORAGE_ENDPOINT}" >/dev/null 2>&1; then
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "rustfs bucket ${TV_STORAGE_BUCKET} was not ready in time"
+              exit 1
+        {{- end }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "turbo-vector.fullname" . }}-runtime
+            {{- with .Values.api.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: TV_PROCESS_ROLE
+              value: api
+            - name: TV_BIND_ADDR
+              value: "0.0.0.0:{{ .Values.api.service.port }}"
+            - name: TV_QUEUE_BROKER_URL
+              value: "http://{{ include "turbo-vector.brokerServiceName" . }}:{{ .Values.broker.service.port }}"
+            - name: TV_OTEL_SERVICE_NAME
+              value: turbo-vector-api
+            - name: TV_ANN_RERANK_SSD_CACHE_DIR
+              value: {{ .Values.api.cache.mountPath | quote }}
+            - name: TV_ANN_RERANK_SSD_CACHE_MAX_ENTRIES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.rerankSsdMaxEntries) | quote }}
+            - name: TV_ANN_RERANK_SSD_CACHE_MAX_BYTES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.rerankSsdMaxBytes) | quote }}
+            - name: TV_NAMESPACE_CACHE_MAX_ENTRIES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.namespaceCacheMaxEntries) | quote }}
+            - name: TV_NAMESPACE_CACHE_MAX_BYTES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.namespaceCacheMaxBytes) | quote }}
+            - name: TV_ANN_BUCKET_CACHE_MAX_ENTRIES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.annBucketCacheMaxEntries) | quote }}
+            - name: TV_ANN_BUCKET_CACHE_MAX_BYTES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.annBucketCacheMaxBytes) | quote }}
+            - name: TV_FILTER_CLUSTER_CACHE_MAX_ENTRIES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.filterClusterCacheMaxEntries) | quote }}
+            - name: TV_FILTER_CLUSTER_CACHE_MAX_BYTES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.filterClusterCacheMaxBytes) | quote }}
+            - name: TV_FILTER_ROW_CACHE_MAX_ENTRIES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.filterRowCacheMaxEntries) | quote }}
+            - name: TV_FILTER_ROW_CACHE_MAX_BYTES
+              value: {{ printf "%d" (int .Values.api.cacheConfig.filterRowCacheMaxBytes) | quote }}
+            {{- if or (eq (include "turbo-vector.storageMode" .) "rustfs") (eq (include "turbo-vector.storageMode" .) "s3") }}
+            - name: TV_STORAGE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ ternary .Values.rustfs.credentials.accessKeyField .Values.storage.s3.accessKeyField (eq (include "turbo-vector.storageMode" .) "rustfs") }}
+            - name: TV_STORAGE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ ternary .Values.rustfs.credentials.secretKeyField .Values.storage.s3.secretKeyField (eq (include "turbo-vector.storageMode" .) "rustfs") }}
+            {{- end }}
+            {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: {{ .Values.storage.gcs.credentialsMountPath | quote }}
+            {{- end }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.probes.liveness.failureThreshold }}
+          volumeMounts:
+            - name: api-cache
+              mountPath: {{ .Values.api.cache.mountPath }}
+            {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+            - name: {{ include "turbo-vector.gcsCredentialsVolumeName" . }}
+              mountPath: {{ dir .Values.storage.gcs.credentialsMountPath }}
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: api-cache
+          {{- if eq .Values.api.cache.mode "emptyDir" }}
+          emptyDir:
+            {{- if .Values.api.cache.emptyDir.sizeLimit }}
+            sizeLimit: {{ .Values.api.cache.emptyDir.sizeLimit }}
+            {{- end }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ default (include "turbo-vector.apiCachePvcName" .) .Values.api.cache.pvc.existingClaim }}
+          {{- end }}
+        {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+        - name: {{ include "turbo-vector.gcsCredentialsVolumeName" . }}
+          secret:
+            secretName: {{ .Values.storage.gcs.credentialsSecretName }}
+            items:
+              - key: {{ .Values.storage.gcs.credentialsSecretKey }}
+                path: {{ base .Values.storage.gcs.credentialsMountPath }}
+        {{- end }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

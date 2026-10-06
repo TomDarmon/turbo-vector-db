@@ -1,0 +1,1546 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "turbo-vector-api",
+    "description": "",
+    "contact": {
+      "name": "turbo-vector contributors"
+    },
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections": {
+      "get": {
+        "tags": [],
+        "operationId": "list_collections",
+        "responses": {
+          "200": {
+            "description": "Collections list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCollectionsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "create_collection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Collection created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Collection already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}": {
+      "get": {
+        "tags": [],
+        "operationId": "get_collection",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid collection name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [],
+        "operationId": "delete_collection",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCollectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid collection name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}/operations/{operation_id}": {
+      "get": {
+        "tags": [],
+        "operationId": "get_operation_status",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation_id",
+            "in": "path",
+            "description": "Upsert operation ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection or operation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}/stats": {
+      "get": {
+        "tags": [],
+        "operationId": "collection_stats",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionStatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}/vectors/delete": {
+      "post": {
+        "tags": [],
+        "operationId": "delete_vectors",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Delete applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}/vectors/fetch": {
+      "post": {
+        "tags": [],
+        "operationId": "fetch_vectors",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Fetch response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}/vectors/query": {
+      "post": {
+        "tags": [],
+        "operationId": "query_vectors",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Query response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/collections/{name}/vectors/upsert": {
+      "post": {
+        "tags": [],
+        "operationId": "upsert_vectors",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Collection name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional idempotency key",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Upsert accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Object store unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/system/runtime": {
+      "get": {
+        "tags": [],
+        "operationId": "runtime_config",
+        "responses": {
+          "200": {
+            "description": "Runtime config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CollectionMetadata": {
+        "type": "object",
+        "required": [
+          "name",
+          "dimension",
+          "metric",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "dimension": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "metadata_schema": {},
+          "metric": {
+            "$ref": "#/components/schemas/Metric"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CollectionStatsResponse": {
+        "type": "object",
+        "required": [
+          "dimension",
+          "vector_count",
+          "segments",
+          "generation"
+        ],
+        "properties": {
+          "dimension": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "segments": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "vector_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "CreateCollectionRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "dimension"
+        ],
+        "properties": {
+          "dimension": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "metadata_schema": {},
+          "metric": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Metric"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DeleteCollectionResponse": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DeleteRequest": {
+        "type": "object",
+        "properties": {
+          "delete_all": {
+            "type": "boolean"
+          },
+          "filter": {},
+          "ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "namespace": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DeleteResponse": {
+        "type": "object",
+        "required": [
+          "deleted_count"
+        ],
+        "properties": {
+          "deleted_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "details": {},
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        }
+      },
+      "FetchRequest": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "include_metadata": {
+            "type": "boolean"
+          },
+          "include_values": {
+            "type": "boolean"
+          },
+          "namespace": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "FetchResponse": {
+        "type": "object",
+        "required": [
+          "vectors",
+          "namespace"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "vectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FetchVector"
+            }
+          }
+        }
+      },
+      "FetchVector": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "metadata": {},
+          "values": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          }
+        }
+      },
+      "FilterCacheMetricsSnapshot": {
+        "type": "object",
+        "required": [
+          "cluster_hits",
+          "cluster_misses",
+          "cluster_evictions",
+          "row_hits",
+          "row_misses",
+          "row_evictions"
+        ],
+        "properties": {
+          "cluster_evictions": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "cluster_hits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "cluster_misses": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "row_evictions": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "row_hits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "row_misses": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ListCollectionsResponse": {
+        "type": "object",
+        "required": [
+          "collections"
+        ],
+        "properties": {
+          "collections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionMetadata"
+            }
+          }
+        }
+      },
+      "Metric": {
+        "type": "string",
+        "enum": [
+          "cosine",
+          "dot",
+          "euclidean"
+        ]
+      },
+      "OperationApplyStatus": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "applied"
+        ]
+      },
+      "OperationStatusResponse": {
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status",
+          "accepted_at"
+        ],
+        "properties": {
+          "accepted_at": {
+            "type": "string"
+          },
+          "applied_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generation": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OperationApplyStatus"
+          }
+        }
+      },
+      "QueryAnnObservability": {
+        "type": "object",
+        "required": [
+          "ann_used",
+          "ann_fallback_count",
+          "buckets_probed",
+          "candidates_scored",
+          "ann_fetch_errors"
+        ],
+        "properties": {
+          "ann_fallback_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "ann_fetch_errors": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "ann_used": {
+            "type": "boolean"
+          },
+          "buckets_probed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "candidates_scored": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "fallback_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filter_cluster_cache_evictions": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "filter_cluster_cache_hits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "filter_cluster_cache_misses": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "filter_row_cache_evictions": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "filter_row_cache_hits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "filter_row_cache_misses": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "filter_widen_passes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "QueryMatch": {
+        "type": "object",
+        "required": [
+          "id",
+          "score"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "metadata": {},
+          "score": {
+            "type": "number",
+            "format": "float"
+          },
+          "values": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          }
+        }
+      },
+      "QueryRequest": {
+        "type": "object",
+        "required": [
+          "vector"
+        ],
+        "properties": {
+          "filter": {},
+          "include_metadata": {
+            "type": "boolean"
+          },
+          "include_values": {
+            "type": "boolean"
+          },
+          "namespace": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search_strategy": {
+            "$ref": "#/components/schemas/QuerySearchStrategy"
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "vector": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          }
+        }
+      },
+      "QueryResponse": {
+        "type": "object",
+        "required": [
+          "matches",
+          "namespace",
+          "ann"
+        ],
+        "properties": {
+          "ann": {
+            "$ref": "#/components/schemas/QueryAnnObservability"
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QueryMatch"
+            }
+          },
+          "namespace": {
+            "type": "string"
+          }
+        }
+      },
+      "QuerySearchStrategy": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "exact",
+          "ann"
+        ]
+      },
+      "RuntimeConfigResponse": {
+        "type": "object",
+        "required": [
+          "bind_addr",
+          "storage_provider",
+          "storage_endpoint",
+          "storage_region",
+          "storage_bucket",
+          "storage_simulated_latency_ms",
+          "wal_queue_background_drain_enabled",
+          "wal_queue_background_drain_interval_ms",
+          "queue_broker_url",
+          "wal_worker_build_fts",
+          "wal_worker_build_ann",
+          "query_ann_enabled",
+          "ann_bucket_fetch_concurrency",
+          "filter_cluster_cache_max_entries",
+          "filter_cluster_cache_max_bytes",
+          "filter_row_cache_max_entries",
+          "filter_row_cache_max_bytes",
+          "filter_max_regex_bytes",
+          "filter_max_glob_bytes",
+          "filter_max_widen_passes",
+          "fts_block_target_postings",
+          "fts_block_split_threshold",
+          "fts_block_merge_threshold",
+          "fts_max_term_blocks_touched_per_doc_update",
+          "fts_enable_delta_rebalance",
+          "otel_enabled",
+          "otel_exporter_otlp_endpoint",
+          "otel_service_name",
+          "otel_metric_export_interval_ms",
+          "otel_sample_ratio"
+        ],
+        "properties": {
+          "ann_bucket_fetch_concurrency": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bind_addr": {
+            "type": "string"
+          },
+          "filter_cache_metrics": {
+            "$ref": "#/components/schemas/FilterCacheMetricsSnapshot"
+          },
+          "filter_cluster_cache_max_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filter_cluster_cache_max_entries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filter_max_glob_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filter_max_regex_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filter_max_widen_passes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filter_row_cache_max_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filter_row_cache_max_entries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fts_block_merge_threshold": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fts_block_split_threshold": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fts_block_target_postings": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fts_enable_delta_rebalance": {
+            "type": "boolean"
+          },
+          "fts_max_term_blocks_touched_per_doc_update": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "otel_enabled": {
+            "type": "boolean"
+          },
+          "otel_exporter_otlp_endpoint": {
+            "type": "string"
+          },
+          "otel_metric_export_interval_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "otel_sample_ratio": {
+            "type": "number",
+            "format": "double"
+          },
+          "otel_service_name": {
+            "type": "string"
+          },
+          "query_ann_enabled": {
+            "type": "boolean"
+          },
+          "queue_broker_url": {
+            "type": "string"
+          },
+          "storage_bucket": {
+            "type": "string"
+          },
+          "storage_endpoint": {
+            "type": "string"
+          },
+          "storage_provider": {
+            "type": "string"
+          },
+          "storage_region": {
+            "type": "string"
+          },
+          "storage_simulated_latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "wal_queue_background_drain_enabled": {
+            "type": "boolean"
+          },
+          "wal_queue_background_drain_interval_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "wal_worker_build_ann": {
+            "type": "boolean"
+          },
+          "wal_worker_build_fts": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpsertAcceptedResponse": {
+        "type": "object",
+        "required": [
+          "accepted",
+          "operation_id"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "operation_id": {
+            "type": "string"
+          }
+        }
+      },
+      "UpsertAppliedResponse": {
+        "type": "object",
+        "required": [
+          "upserted_count",
+          "generation"
+        ],
+        "properties": {
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "upserted_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "UpsertRequest": {
+        "type": "object",
+        "required": [
+          "vectors"
+        ],
+        "properties": {
+          "namespace": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpsertVector"
+            }
+          }
+        }
+      },
+      "UpsertResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UpsertAppliedResponse"
+          },
+          {
+            "$ref": "#/components/schemas/UpsertAcceptedResponse"
+          }
+        ]
+      },
+      "UpsertVector": {
+        "type": "object",
+        "required": [
+          "id",
+          "values"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "metadata": {},
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "turbo-vector-api",
+      "description": "Object-storage-native vector API"
+    }
+  ]
+}

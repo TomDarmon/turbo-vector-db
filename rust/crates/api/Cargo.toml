@@ -1,0 +1,36 @@
+[package]
+name = "turbo-vector-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+chrono = "0.4.43"
+hex = "0.4.3"
+opentelemetry = "0.31.0"
+opentelemetry-appender-tracing = "0.31.0"
+opentelemetry-otlp = "0.31.0"
+opentelemetry_sdk = "0.31.0"
+regex-lite = "0.1.9"
+reqwest = { version = "0.13.2", default-features = false, features = ["json"] }
+roaring = "0.11.3"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10.9"
+tokio.workspace = true
+tracing.workspace = true
+tracing-opentelemetry = "0.32.1"
+tracing-subscriber.workspace = true
+tower-http = { version = "0.6", features = ["trace"] }
+turbo-vector-core = { path = "../core" }
+turbo-vector-manifest = { path = "../manifest" }
+turbo-vector-queue = { path = "../queue" }
+turbo-vector-storage = { path = "../storage" }
+utoipa.workspace = true
+
+[dev-dependencies]
+tower = "0.5"

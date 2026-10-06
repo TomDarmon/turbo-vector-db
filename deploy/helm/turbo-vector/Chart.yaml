@@ -1,0 +1,13 @@
+apiVersion: v2
+name: turbo-vector
+description: Helm chart for turbo-vector API, broker, and worker runtime
+version: 0.1.0
+appVersion: "0.1.0"
+type: application
+keywords:
+  - vector
+  - search
+  - object-storage
+home: https://github.com/turbo-vector/turbo-vector
+maintainers:
+  - name: turbo-vector contributors

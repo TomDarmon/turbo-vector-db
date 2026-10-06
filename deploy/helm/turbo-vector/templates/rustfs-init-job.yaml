@@ -1,0 +1,53 @@
+{{- if .Values.rustfs.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-rustfs-init
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rustfs-init
+spec:
+  backoffLimit: 4
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: rustfs-init
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      containers:
+        - name: rustfs-init
+          image: {{ .Values.rustfs.bucketInit.image | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.accessKeyField }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.secretKeyField }}
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: TV_STORAGE_ENDPOINT
+              value: {{ include "turbo-vector.storageEndpoint" . | quote }}
+            - name: TV_STORAGE_BUCKET
+              value: {{ .Values.storage.bucket | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              echo "[rustfs-init] waiting for RustFS endpoint ${TV_STORAGE_ENDPOINT}"
+              until aws s3api list-buckets --endpoint-url "${TV_STORAGE_ENDPOINT}" >/dev/null 2>&1; do
+                sleep 1
+              done
+              if ! aws s3api head-bucket --bucket "${TV_STORAGE_BUCKET}" --endpoint-url "${TV_STORAGE_ENDPOINT}" >/dev/null 2>&1; then
+                aws s3 mb "s3://${TV_STORAGE_BUCKET}" --endpoint-url "${TV_STORAGE_ENDPOINT}"
+              fi
+              echo "[rustfs-init] bucket ${TV_STORAGE_BUCKET} is ready"
+{{- end }}

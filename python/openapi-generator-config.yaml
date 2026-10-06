@@ -1,0 +1,7 @@
+packageName: turbo_vector_sdk
+projectName: turbo-vector-sdk
+packageVersion: 0.1.0
+library: asyncio
+generateSourceCodeOnly: true
+hideGenerationTimestamp: true
+disallowAdditionalPropertiesIfNotPresent: false

@@ -1,0 +1,81 @@
+{{- if .Values.rustfs.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-rustfs
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rustfs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "turbo-vector.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: rustfs
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: rustfs
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      containers:
+        - name: rustfs
+          image: {{ .Values.rustfs.image | quote }}
+          imagePullPolicy: {{ .Values.rustfs.imagePullPolicy }}
+          args:
+            - /data
+          env:
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.accessKeyField }}
+            - name: RUSTFS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.secretKeyField }}
+            - name: RUSTFS_CONSOLE_ENABLE
+              value: "true"
+          ports:
+            - name: s3
+              containerPort: {{ .Values.rustfs.service.port }}
+            - name: console
+              containerPort: {{ .Values.rustfs.service.consolePort }}
+          readinessProbe:
+            tcpSocket:
+              port: s3
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: s3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.rustfs.resources | nindent 12 }}
+          volumeMounts:
+            - name: rustfs-data
+              mountPath: /data
+      volumes:
+        - name: rustfs-data
+          {{- if .Values.rustfs.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "turbo-vector.fullname" . }}-rustfs-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}

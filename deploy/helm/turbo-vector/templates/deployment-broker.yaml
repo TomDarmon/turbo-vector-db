@@ -1,0 +1,153 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-broker
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+spec:
+  replicas: {{ .Values.broker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "turbo-vector.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: broker
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: broker
+      {{- with .Values.broker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.rustfs.enabled }}
+      initContainers:
+        - name: wait-for-rustfs-bucket
+          image: {{ .Values.rustfs.bucketInit.image | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.accessKeyField }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ .Values.rustfs.credentials.secretKeyField }}
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: TV_STORAGE_ENDPOINT
+              value: {{ include "turbo-vector.storageEndpoint" . | quote }}
+            - name: TV_STORAGE_BUCKET
+              value: {{ .Values.storage.bucket | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              for i in $(seq 1 {{ max 10 (div .Values.preflight.timeoutSeconds 2) }}); do
+                if aws s3api head-bucket --bucket "${TV_STORAGE_BUCKET}" --endpoint-url "${TV_STORAGE_ENDPOINT}" >/dev/null 2>&1; then
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "rustfs bucket ${TV_STORAGE_BUCKET} was not ready in time"
+              exit 1
+      {{- end }}
+      containers:
+        - name: broker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.broker.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "turbo-vector.fullname" . }}-runtime
+            {{- with .Values.broker.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: TV_PROCESS_ROLE
+              value: broker
+            - name: TV_BIND_ADDR
+              value: "0.0.0.0:{{ .Values.broker.service.port }}"
+            - name: TV_BROKER_REQUEUE_INTERVAL_MS
+              value: {{ .Values.broker.requeueIntervalMs | quote }}
+            - name: TV_OTEL_SERVICE_NAME
+              value: turbo-vector-broker
+            {{- if or (eq (include "turbo-vector.storageMode" .) "rustfs") (eq (include "turbo-vector.storageMode" .) "s3") }}
+            - name: TV_STORAGE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ ternary .Values.rustfs.credentials.accessKeyField .Values.storage.s3.accessKeyField (eq (include "turbo-vector.storageMode" .) "rustfs") }}
+            - name: TV_STORAGE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "turbo-vector.storageS3CredentialsSecretName" . }}
+                  key: {{ ternary .Values.rustfs.credentials.secretKeyField .Values.storage.s3.secretKeyField (eq (include "turbo-vector.storageMode" .) "rustfs") }}
+            {{- end }}
+            {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: {{ .Values.storage.gcs.credentialsMountPath | quote }}
+            {{- end }}
+            {{- with .Values.broker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.broker.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.broker.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.broker.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.broker.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.broker.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.broker.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.broker.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.broker.probes.liveness.failureThreshold }}
+          resources:
+            {{- toYaml .Values.broker.resources | nindent 12 }}
+          {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+          volumeMounts:
+            - name: {{ include "turbo-vector.gcsCredentialsVolumeName" . }}
+              mountPath: {{ dir .Values.storage.gcs.credentialsMountPath }}
+              readOnly: true
+          {{- end }}
+      {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+      volumes:
+        - name: {{ include "turbo-vector.gcsCredentialsVolumeName" . }}
+          secret:
+            secretName: {{ .Values.storage.gcs.credentialsSecretName }}
+            items:
+              - key: {{ .Values.storage.gcs.credentialsSecretKey }}
+                path: {{ base .Values.storage.gcs.credentialsMountPath }}
+      {{- end }}
+      {{- with .Values.broker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

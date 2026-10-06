@@ -1,0 +1,86 @@
+{{- if and .Values.preflight.enabled (eq (include "turbo-vector.storageMode" .) "gcs") }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-preflight-storage-gcs
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: preflight
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: {{ .Values.preflight.hookDeletePolicy | quote }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "turbo-vector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: preflight
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "turbo-vector.serviceAccountName" . }}
+      containers:
+        - name: storage-preflight-gcs
+          image: {{ .Values.preflight.gcloudImage | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TV_STORAGE_BUCKET
+              value: {{ .Values.storage.bucket | quote }}
+            - name: TV_STORAGE_ENDPOINT
+              value: {{ .Values.storage.gcs.endpoint | quote }}
+            {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: {{ .Values.storage.gcs.credentialsMountPath | quote }}
+            {{- end }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              set -eu
+              python3 - <<'PY'
+              import os
+              import sys
+              import urllib.request
+              import urllib.error
+
+              endpoint = os.environ.get("TV_STORAGE_ENDPOINT", "")
+              if not endpoint:
+                  print("[preflight] TV_STORAGE_ENDPOINT is empty", file=sys.stderr)
+                  sys.exit(1)
+              try:
+                  urllib.request.urlopen(endpoint, timeout=10)
+              except urllib.error.HTTPError as exc:
+                  print(f"[preflight] reached GCS endpoint {endpoint} (http_status={exc.code})")
+              except Exception as exc:
+                  print(f"[preflight] failed to reach GCS endpoint {endpoint}: {exc}", file=sys.stderr)
+                  sys.exit(1)
+              else:
+                  print(f"[preflight] reached GCS endpoint {endpoint}")
+              PY
+
+              if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
+                gcloud auth activate-service-account --key-file "${GOOGLE_APPLICATION_CREDENTIALS}"
+              fi
+
+              if ! gcloud storage ls "gs://${TV_STORAGE_BUCKET}" >/dev/null 2>&1; then
+                echo "[preflight] unable to list gs://${TV_STORAGE_BUCKET}" >&2
+                exit 1
+              fi
+              echo "[preflight] gcs bucket connectivity check passed"
+          {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+          volumeMounts:
+            - name: {{ include "turbo-vector.gcsCredentialsVolumeName" . }}
+              mountPath: {{ dir .Values.storage.gcs.credentialsMountPath }}
+              readOnly: true
+          {{- end }}
+      {{- if eq (include "turbo-vector.gcsCredentialsEnabled" .) "true" }}
+      volumes:
+        - name: {{ include "turbo-vector.gcsCredentialsVolumeName" . }}
+          secret:
+            secretName: {{ .Values.storage.gcs.credentialsSecretName }}
+            items:
+              - key: {{ .Values.storage.gcs.credentialsSecretKey }}
+                path: {{ base .Values.storage.gcs.credentialsMountPath }}
+      {{- end }}
+{{- end }}

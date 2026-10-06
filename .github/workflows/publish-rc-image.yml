@@ -1,0 +1,86 @@
+name: Publish RC images
+
+on:
+  push:
+    tags:
+      - "image/v*.*.*-rc*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    # Disabled by default. See docs/ci-cd-setup.md to enable on your own GCP project.
+    if: ${{ vars.CICD_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_REGION || 'your-gcp-region' }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID || 'your-gcp-project-id' }}/${{ vars.GCP_DOCKER_REPOSITORY || 'your-docker-repository' }}
+      IMAGE_API: turbo-vector-api
+      IMAGE_BROKER: turbo-vector-broker
+      IMAGE_WORKER: turbo-vector-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate RC tag and resolve commit
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "${TAG}" =~ ^image/v[0-9]+\.[0-9]+\.[0-9]+-rc([0-9]+)?$ ]]; then
+            echo "Invalid image rc tag '${TAG}'. Expected format image/vX.Y.Z-rc or image/vX.Y.Z-rcN."
+            exit 1
+          fi
+
+          git fetch --force --tags
+          if ! git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag '${TAG}' does not exist in repository."
+            exit 1
+          fi
+          COMMIT="$(git rev-list -n 1 "refs/tags/${TAG}")"
+          RELEASE_TAG="${TAG#image/}"
+
+          echo "tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "commit=${COMMIT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication for Artifact Registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          REGISTRY_HOST="$(echo "${GCP_ARTIFACT_REGISTRY_REPOSITORY}" | cut -d'/' -f1)"
+          gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
+
+      - name: Set up Docker Buildx (container driver for GHA cache backend)
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Build and push role image tags from one artifact
+        uses: docker/build-push-action@v6
+        with:
+          context: ./rust
+          file: ./rust/Dockerfile
+          push: true
+          cache-from: type=gha,scope=turbo-vector-rust
+          cache-to: type=gha,scope=turbo-vector-rust,mode=max
+          tags: |
+            ${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag }}
+            ${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.IMAGE_API }}:sha-${{ steps.meta.outputs.commit }}
+            ${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.IMAGE_BROKER }}:${{ steps.meta.outputs.tag }}
+            ${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.IMAGE_BROKER }}:sha-${{ steps.meta.outputs.commit }}
+            ${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.IMAGE_WORKER }}:${{ steps.meta.outputs.tag }}
+            ${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.IMAGE_WORKER }}:sha-${{ steps.meta.outputs.commit }}

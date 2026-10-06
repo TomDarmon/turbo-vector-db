@@ -1,0 +1,20 @@
+{{- if and .Values.rustfs.enabled .Values.rustfs.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "turbo-vector.fullname" . }}-rustfs-data
+  labels:
+    {{- include "turbo-vector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rustfs
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    {{- toYaml .Values.rustfs.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.rustfs.persistence.size }}
+  {{- if .Values.rustfs.persistence.storageClass }}
+  storageClassName: {{ .Values.rustfs.persistence.storageClass }}
+  {{- end }}
+{{- end }}
